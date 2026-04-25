@@ -124,15 +124,18 @@ export default function App() {
 
     try {
       // 1️⃣ Call Anthropic directly from browser (temp/testing only)
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
+      const speakRes = await fetch("/.netlify/functions/speak", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ text }),
+});
+if (!speakRes.ok) throw new Error(`Voice failed (${speakRes.status})`);
+const { audio, contentType } = await speakRes.json();
+const binary = atob(audio);
+const bytes = new Uint8Array(binary.length);
+for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+const blob = new Blob([bytes], { type: contentType || "audio/mpeg" });
+const url = URL.createObjectURL(blob);
           model: "claude-sonnet-4-5",
           max_tokens: 600,
           system: SYSTEM_PROMPT,
