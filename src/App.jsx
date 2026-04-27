@@ -451,7 +451,11 @@ export default function App() {
             The Living Word
           </h1>
           <p style={{ color: "#8a7a5a", fontSize: 13, margin: "6px 0 0", letterSpacing: 2 }}>
-            SCRIPTURE ANSWERED IN YOUR VOICE
+            <p style={{ color: "#8a7a5a", fontSize: 13, margin: "6px 0 0", letterSpacing: 2 }}>
+  Guidance from Scripture,{" "}
+  <em><strong style={{ color: "#c9a84c" }}>SPOKEN</strong></em>{" "}
+  just for you
+</p>
           </p>
         </div>
 
