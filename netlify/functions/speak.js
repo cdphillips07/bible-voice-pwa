@@ -40,6 +40,11 @@ exports.handler = async (event) => {
           // with virtually identical quality for spoken word content
           model_id: "eleven_turbo_v2",
           voice_settings: {
+  stability: 0.75,
+  similarity_boost: 0.85,
+  style: 0.0,
+  use_speaker_boost: true,
+},
             stability: 0.6,
             similarity_boost: 0.85,
             style: 0.2,
