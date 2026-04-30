@@ -1,5 +1,5 @@
 // netlify/functions/speak.js
-// Uses eleven_turbo_v2 for 2-3x faster audio generation
+// Uses eleven_monolingual_v1 for 2-3x faster audio generation
 // with no noticeable quality difference for spoken word content.
 
 exports.handler = async (event) => {
