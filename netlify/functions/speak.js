@@ -57,8 +57,15 @@ exports.handler = async (event) => {
 
     if (!response.ok) {
       const err = await response.text();
-      console.error("ElevenLabs error:", err);
-      return { statusCode: 502, body: JSON.stringify({ error: "Voice API error" }) };
+console.error("ElevenLabs error:", err);
+return { 
+  statusCode: 502, 
+  body: JSON.stringify({ 
+    error: "Voice API error", 
+    detail: err,
+    status: response.status 
+  }) 
+};
     }
 
     const arrayBuffer = await response.arrayBuffer();
