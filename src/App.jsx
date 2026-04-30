@@ -384,7 +384,13 @@ export default function App() {
       setAudioLoading(false);
 
       // Auto-play as soon as audio is ready
-      setTimeout(() => audioRef.current?.play(), 100);
+      setTimeout(() => {
+  if (audioRef.current) {
+    audioRef.current.play().catch(() => {
+      // Browser blocked autoplay — user must tap play
+    });
+  }
+}, 300);
 
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");
