@@ -1,7 +1,3 @@
-// netlify/functions/speak.js
-// Uses eleven_monolingual_v1 for 2-3x faster audio generation
-// with no noticeable quality difference for spoken word content.
-
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
@@ -36,36 +32,21 @@ exports.handler = async (event) => {
         },
         body: JSON.stringify({
           text: text.trim(),
-          // eleven_turbo_v2 is 2-3x faster than eleven_monolingual_v1
-          // with virtually identical quality for spoken word content
-          model_id: "eleven_turbo_v2",
+          model_id: "eleven_monolingual_v1",
           voice_settings: {
-  stability: 0.75,
-  similarity_boost: 0.85,
-  style: 0.0,
-  use_speaker_boost: true,
-},
-            stability: 0.6,
+            stability: 0.75,
             similarity_boost: 0.85,
-            style: 0.2,
+            style: 0.0,
             use_speaker_boost: true,
           },
-          // Request optimized streaming audio format for faster delivery
         }),
       }
     );
 
     if (!response.ok) {
       const err = await response.text();
-console.error("ElevenLabs error:", err);
-return { 
-  statusCode: 502, 
-  body: JSON.stringify({ 
-    error: "Voice API error", 
-    detail: err,
-    status: response.status 
-  }) 
-};
+      console.error("ElevenLabs error:", err);
+      return { statusCode: 502, body: JSON.stringify({ error: "Voice API error", detail: err }) };
     }
 
     const arrayBuffer = await response.arrayBuffer();
