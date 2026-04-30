@@ -51,7 +51,6 @@ exports.handler = async (event) => {
             use_speaker_boost: true,
           },
           // Request optimized streaming audio format for faster delivery
-          output_format: "mp3_44100_128",
         }),
       }
     );
