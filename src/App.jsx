@@ -401,8 +401,8 @@ export default function App() {
 
   const handleSubscribe = (plan) => {
     const urls = {
-      monthly: "https://buy.stripe.com/your-monthly-link",
-      yearly:  "https://buy.stripe.com/your-yearly-link",
+      monthly: "https://buy.stripe.com/14A00iaBo8pB2pn1vVcwg02",
+      yearly:  "https://buy.stripe.com/7sY8wO10OcFR1ljfmLcwg01",
     };
     window.location.href = urls[plan];
   };
