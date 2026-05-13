@@ -36,6 +36,18 @@ function isSubscriber() {
   } catch { return false; }
 }
 
+function activateSubscription() {
+  // Set subscription for 1 year — Stripe will handle actual renewal
+  const expiresAt = new Date();
+  expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+  localStorage.setItem(SUB_KEY, JSON.stringify({
+    active: true,
+    expiresAt: expiresAt.toISOString(),
+    activatedAt: new Date().toISOString(),
+  }));
+}
+
+// Dev helper — type activateSubscription() in browser console to test
 window.activateSubscription = (months = 1) => {
   const expiresAt = new Date();
   expiresAt.setMonth(expiresAt.getMonth() + months);
@@ -74,12 +86,17 @@ function Waveform({ active }) {
           0%, 100% { opacity: 0.4; }
           50%       { opacity: 1;   }
         }
+        @keyframes celebratePulse {
+          0%   { transform: scale(1);   }
+          50%  { transform: scale(1.05); }
+          100% { transform: scale(1);   }
+        }
       `}</style>
     </div>
   );
 }
 
-// ─── Typing indicator ─────────────────────────────────────────────────────────
+// ─── Typing dots ──────────────────────────────────────────────────────────────
 function TypingDots() {
   return (
     <div style={{ display: "flex", gap: 5, alignItems: "center", padding: "4px 0" }}>
@@ -91,6 +108,48 @@ function TypingDots() {
           animationDelay: `${i * 0.2}s`,
         }} />
       ))}
+    </div>
+  );
+}
+
+// ─── Welcome back banner (shown after successful Stripe payment) ───────────────
+function SubscriptionSuccess({ onDismiss }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(0,0,0,0.85)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "20px", backdropFilter: "blur(8px)",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 440,
+        background: "linear-gradient(160deg, #0d0a07, #1a1208)",
+        border: "1px solid rgba(201,168,76,0.4)",
+        borderRadius: 4, padding: "40px 36px",
+        fontFamily: "'Georgia', serif",
+        textAlign: "center",
+        animation: "celebratePulse 0.6s ease",
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>✦</div>
+        <h2 style={{
+          color: "#f0e6cc", fontSize: 22, fontWeight: 400,
+          margin: "0 0 12px", letterSpacing: 2,
+        }}>
+          Welcome to The Living Word
+        </h2>
+        <p style={{ color: "#8a7a5a", fontSize: 14, lineHeight: 1.7, margin: "0 0 28px" }}>
+          Your subscription is active. You now have unlimited access to Scripture guidance, spoken just for you.
+        </p>
+        <button onClick={onDismiss} style={{
+          width: "100%", padding: "14px",
+          background: "#c9a84c", color: "#0d0a07",
+          border: "none", fontSize: 13, letterSpacing: 3,
+          fontFamily: "'Georgia', serif", textTransform: "uppercase",
+          cursor: "pointer", borderRadius: 2,
+        }}>
+          Begin
+        </button>
+      </div>
     </div>
   );
 }
@@ -237,7 +296,7 @@ function UsageBadge({ count, subscribed }) {
   );
 }
 
-// ─── Loading status line ──────────────────────────────────────────────────────
+// ─── Loading status ───────────────────────────────────────────────────────────
 function LoadingStatus({ loading, audioLoading }) {
   if (!loading && !audioLoading) return null;
   return (
@@ -246,8 +305,7 @@ function LoadingStatus({ loading, audioLoading }) {
       marginTop: 20, padding: "12px 16px",
       background: "rgba(201,168,76,0.04)",
       border: "1px solid rgba(201,168,76,0.1)",
-      borderRadius: 1,
-      animation: "fadeIn 0.3s ease",
+      borderRadius: 1, animation: "fadeIn 0.3s ease",
     }}>
       <TypingDots />
       <span style={{ color: "#8a7a5a", fontSize: 12, letterSpacing: 1 }}>
@@ -271,13 +329,26 @@ export default function App() {
   const [liveTranscript,  setLiveTranscript]  = useState("");
   const [error,           setError]           = useState("");
   const [showPaywall,     setShowPaywall]      = useState(false);
+  const [showSuccess,     setShowSuccess]      = useState(false);
   const [usage,           setUsage]           = useState(getUsage());
   const [subscribed,      setSubscribed]      = useState(isSubscriber());
 
   const audioRef       = useRef(null);
   const recognitionRef = useRef(null);
 
-  // ── Typewriter effect for answer display ──
+  // ── Check for ?subscribed=true in URL after Stripe redirect ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("subscribed") === "true") {
+      activateSubscription();
+      setSubscribed(true);
+      setShowSuccess(true);
+      // Clean the URL without reloading the page
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  // ── Typewriter effect ──
   useEffect(() => {
     if (!answer) { setDisplayedAnswer(""); return; }
     setDisplayedAnswer("");
@@ -286,7 +357,7 @@ export default function App() {
       setDisplayedAnswer(answer.slice(0, i + 1));
       i++;
       if (i >= answer.length) clearInterval(interval);
-    }, 18); // ~18ms per character feels natural
+    }, 18);
     return () => clearInterval(interval);
   }, [answer]);
 
@@ -326,7 +397,7 @@ export default function App() {
     }
   };
 
-  // ── Core ask flow with parallel loading ──
+  // ── Ask flow ──
   const askBible = async (q) => {
     const finalQ = (q || question).trim();
     if (!finalQ) return;
@@ -351,7 +422,6 @@ export default function App() {
     }
 
     try {
-      // 1️⃣ Fetch text answer
       const askRes = await fetch("/.netlify/functions/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -359,13 +429,10 @@ export default function App() {
       });
       if (!askRes.ok) throw new Error(`Scripture fetch failed (${askRes.status})`);
       const { answer: text } = await askRes.json();
-
-      // 2️⃣ Show text AND fire audio request IN PARALLEL
       setAnswer(text);
       setLoading(false);
       setAudioLoading(true);
 
-      // Audio fires immediately — doesn't wait for typewriter to finish
       const speakRes = await fetch("/.netlify/functions/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -382,15 +449,11 @@ export default function App() {
 
       setAudioUrl(url);
       setAudioLoading(false);
-
-      // Auto-play as soon as audio is ready
       setTimeout(() => {
-  if (audioRef.current) {
-    audioRef.current.play().catch(() => {
-      // Browser blocked autoplay — user must tap play
-    });
-  }
-}, 300);
+        if (audioRef.current) {
+          audioRef.current.play().catch(() => {});
+        }
+      }, 300);
 
     } catch (err) {
       setError(err.message || "Something went wrong. Please try again.");
@@ -431,7 +494,11 @@ export default function App() {
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {showPaywall && (
+      {showSuccess && (
+        <SubscriptionSuccess onDismiss={() => setShowSuccess(false)} />
+      )}
+
+      {showPaywall && !showSuccess && (
         <Paywall
           onClose={() => setShowPaywall(false)}
           onSubscribe={handleSubscribe}
@@ -457,11 +524,9 @@ export default function App() {
             The Living Word
           </h1>
           <p style={{ color: "#8a7a5a", fontSize: 13, margin: "6px 0 0", letterSpacing: 2 }}>
-            <p style={{ color: "#8a7a5a", fontSize: 13, margin: "6px 0 0", letterSpacing: 2 }}>
-  Guidance from Scripture,{" "}
-  <em><strong style={{ color: "#c9a84c" }}>SPOKEN</strong></em>{" "}
-  just for you
-</p>
+            Guidance from Scripture,{" "}
+            <em><strong style={{ color: "#c9a84c" }}>SPOKEN</strong></em>{" "}
+            just for you
           </p>
         </div>
 
@@ -630,7 +695,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ANSWER — typewriter effect */}
+          {/* ANSWER */}
           {displayedAnswer && (
             <div style={{
               marginTop: 28, paddingTop: 24,
@@ -640,12 +705,8 @@ export default function App() {
               <div style={{ fontSize: 11, letterSpacing: 2, color: "#c9a84c", marginBottom: 14 }}>
                 THE WORD SPEAKS
               </div>
-              <p style={{
-                color: "#e8dcc8", fontSize: 15, lineHeight: 1.85,
-                margin: 0, fontStyle: "italic",
-              }}>
+              <p style={{ color: "#e8dcc8", fontSize: 15, lineHeight: 1.85, margin: 0, fontStyle: "italic" }}>
                 {displayedAnswer}
-                {/* Blinking cursor while typing */}
                 {displayedAnswer.length < answer.length && (
                   <span style={{ animation: "pulse 0.8s infinite", opacity: 0.7 }}>▌</span>
                 )}
@@ -656,20 +717,14 @@ export default function App() {
                   <div style={{ fontSize: 11, letterSpacing: 2, color: "#8a7a5a", marginBottom: 10 }}>
                     ♦ SPOKEN IN YOUR VOICE
                   </div>
-                  <audio
-                    ref={audioRef}
-                    controls
-                    src={audioUrl}
-                    style={{
-                      width: "100%",
-                      filter: "invert(0.85) sepia(0.3) hue-rotate(5deg)",
-                      borderRadius: 2,
-                    }}
-                  />
+                  <audio ref={audioRef} controls src={audioUrl} style={{
+                    width: "100%",
+                    filter: "invert(0.85) sepia(0.3) hue-rotate(5deg)",
+                    borderRadius: 2,
+                  }} />
                 </div>
               )}
 
-              {/* Show audio loading indicator while voice is being prepared */}
               {audioLoading && !audioUrl && (
                 <div style={{
                   marginTop: 20, display: "flex", alignItems: "center", gap: 10,
