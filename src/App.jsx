@@ -5,6 +5,9 @@ const FREE_QUESTIONS_PER_DAY = 3;
 const USAGE_KEY = "lw-usage";
 const SUB_KEY   = "lw-subscriber";
 
+// Stripe customer portal URL — users manage/cancel subscription here
+const STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/bpc_1TWjHlCSgitQgN9GiYx0DEgO";
+
 // ─── Usage helpers ────────────────────────────────────────────────────────────
 function getTodayKey() {
   return new Date().toISOString().split("T")[0];
@@ -37,7 +40,6 @@ function isSubscriber() {
 }
 
 function activateSubscription() {
-  // Set subscription for 1 year — Stripe will handle actual renewal
   const expiresAt = new Date();
   expiresAt.setFullYear(expiresAt.getFullYear() + 1);
   localStorage.setItem(SUB_KEY, JSON.stringify({
@@ -47,7 +49,6 @@ function activateSubscription() {
   }));
 }
 
-// Dev helper — type activateSubscription() in browser console to test
 window.activateSubscription = (months = 1) => {
   const expiresAt = new Date();
   expiresAt.setMonth(expiresAt.getMonth() + months);
@@ -87,9 +88,9 @@ function Waveform({ active }) {
           50%       { opacity: 1;   }
         }
         @keyframes celebratePulse {
-          0%   { transform: scale(1);   }
+          0%   { transform: scale(1);    }
           50%  { transform: scale(1.05); }
-          100% { transform: scale(1);   }
+          100% { transform: scale(1);    }
         }
       `}</style>
     </div>
@@ -112,7 +113,7 @@ function TypingDots() {
   );
 }
 
-// ─── Welcome back banner (shown after successful Stripe payment) ───────────────
+// ─── Subscription success screen ──────────────────────────────────────────────
 function SubscriptionSuccess({ onDismiss }) {
   return (
     <div style={{
@@ -126,15 +127,11 @@ function SubscriptionSuccess({ onDismiss }) {
         background: "linear-gradient(160deg, #0d0a07, #1a1208)",
         border: "1px solid rgba(201,168,76,0.4)",
         borderRadius: 4, padding: "40px 36px",
-        fontFamily: "'Georgia', serif",
-        textAlign: "center",
+        fontFamily: "'Georgia', serif", textAlign: "center",
         animation: "celebratePulse 0.6s ease",
       }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>✦</div>
-        <h2 style={{
-          color: "#f0e6cc", fontSize: 22, fontWeight: 400,
-          margin: "0 0 12px", letterSpacing: 2,
-        }}>
+        <h2 style={{ color: "#f0e6cc", fontSize: 22, fontWeight: 400, margin: "0 0 12px", letterSpacing: 2 }}>
           Welcome to The Living Word
         </h2>
         <p style={{ color: "#8a7a5a", fontSize: 14, lineHeight: 1.7, margin: "0 0 28px" }}>
@@ -315,6 +312,36 @@ function LoadingStatus({ loading, audioLoading }) {
   );
 }
 
+// ─── Footer ───────────────────────────────────────────────────────────────────
+function Footer({ subscribed }) {
+  return (
+    <div style={{
+      marginTop: 24,
+      textAlign: "center",
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+    }}>
+      <p style={{ color: "#3a2e1e", fontSize: 11, letterSpacing: 1 }}>
+        Powered by Claude · ElevenLabs Voice Clone · Web Speech API
+      </p>
+      <div style={{ display: "flex", justifyContent: "center", gap: 20, flexWrap: "wrap" }}>
+        <a href="/privacy.html" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
+          Privacy Policy
+        </a>
+        <a href="/terms.html" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
+          Terms of Service
+        </a>
+        {subscribed && (
+          <a href={STRIPE_PORTAL_URL} style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
+            Manage Subscription
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [question,        setQuestion]        = useState("");
@@ -336,14 +363,13 @@ export default function App() {
   const audioRef       = useRef(null);
   const recognitionRef = useRef(null);
 
-  // ── Check for ?subscribed=true in URL after Stripe redirect ──
+  // ── Detect ?subscribed=true after Stripe redirect ──
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("subscribed") === "true") {
       activateSubscription();
       setSubscribed(true);
       setShowSuccess(true);
-      // Clean the URL without reloading the page
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -450,9 +476,7 @@ export default function App() {
       setAudioUrl(url);
       setAudioLoading(false);
       setTimeout(() => {
-        if (audioRef.current) {
-          audioRef.current.play().catch(() => {});
-        }
+        if (audioRef.current) audioRef.current.play().catch(() => {});
       }, 300);
 
     } catch (err) {
@@ -470,7 +494,6 @@ export default function App() {
     window.location.href = urls[plan];
   };
 
-  // ─── Styles ────────────────────────────────────────────────────────────────
   const busy     = loading || audioLoading;
   const hitLimit = !subscribed && usage.count >= FREE_QUESTIONS_PER_DAY;
 
@@ -491,18 +514,11 @@ export default function App() {
     borderRadius: 1, transition: "all 0.3s",
   });
 
-  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {showSuccess && (
-        <SubscriptionSuccess onDismiss={() => setShowSuccess(false)} />
-      )}
-
+      {showSuccess && <SubscriptionSuccess onDismiss={() => setShowSuccess(false)} />}
       {showPaywall && !showSuccess && (
-        <Paywall
-          onClose={() => setShowPaywall(false)}
-          onSubscribe={handleSubscribe}
-        />
+        <Paywall onClose={() => setShowPaywall(false)} onSubscribe={handleSubscribe} />
       )}
 
       <div style={{
@@ -538,10 +554,7 @@ export default function App() {
           borderRadius: 2, padding: "36px 40px",
           backdropFilter: "blur(8px)",
         }}>
-          <h2 style={{
-            color: "#c9a84c", fontSize: 13, letterSpacing: 3,
-            fontWeight: 400, marginTop: 0, marginBottom: 16,
-          }}>
+          <h2 style={{ color: "#c9a84c", fontSize: 13, letterSpacing: 3, fontWeight: 400, marginTop: 0, marginBottom: 16 }}>
             ASK THE SCRIPTURE
           </h2>
 
@@ -549,7 +562,6 @@ export default function App() {
             <UsageBadge count={usage.count} subscribed={subscribed} />
           </div>
 
-          {/* Hit limit banner */}
           {hitLimit && (
             <div style={{
               background: "rgba(201,168,76,0.06)",
@@ -574,7 +586,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Input mode toggle */}
           {speechSupported && !hitLimit && (
             <div style={{
               display: "flex", marginBottom: 20,
@@ -594,7 +605,6 @@ export default function App() {
             </div>
           )}
 
-          {/* TEXT MODE */}
           {inputMode === "text" && !hitLimit && (
             <>
               <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 14px" }}>
@@ -610,17 +620,12 @@ export default function App() {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askBible(); }
                 }}
               />
-              <button
-                onClick={() => askBible()}
-                disabled={busy || !question.trim()}
-                style={seekBtn(busy || !question.trim())}
-              >
+              <button onClick={() => askBible()} disabled={busy || !question.trim()} style={seekBtn(busy || !question.trim())}>
                 {loading ? "Seeking…" : audioLoading ? "Preparing Voice…" : "Seek the Word"}
               </button>
             </>
           )}
 
-          {/* VOICE MODE */}
           {inputMode === "voice" && !hitLimit && (
             <div style={{ textAlign: "center" }}>
               <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 24px" }}>
@@ -680,10 +685,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Loading indicator */}
           <LoadingStatus loading={loading} audioLoading={audioLoading} />
 
-          {/* ERROR */}
           {error && (
             <div style={{
               marginTop: 16, padding: "10px 14px",
@@ -695,7 +698,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ANSWER */}
           {displayedAnswer && (
             <div style={{
               marginTop: 28, paddingTop: 24,
@@ -738,9 +740,7 @@ export default function App() {
           )}
         </div>
 
-        <p style={{ color: "#3a2e1e", fontSize: 11, marginTop: 20, letterSpacing: 1 }}>
-          Powered by Claude · ElevenLabs Voice Clone · Web Speech API
-        </p>
+        <Footer subscribed={subscribed} />
       </div>
     </>
   );
