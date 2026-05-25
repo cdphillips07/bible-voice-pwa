@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const FREE_QUESTIONS_PER_DAY = 3;
+const FREE_QUESTIONS_PER_DAY = 999;
 const USAGE_KEY = "lw-usage";
 const SUB_KEY   = "lw-subscriber";
 
