@@ -34,13 +34,11 @@ exports.handler = async (event) => {
           text: text.trim(),
           model_id: "eleven_monolingual_v1",
           voice_settings: {
-  stability: 0.85,
-  similarity_boost: 0.85,
-  style: 0.0,
-  use_speaker_boost: true,
-  speed: 0.95,
-},
-},
+            stability: 0.85,
+            similarity_boost: 0.85,
+            style: 0.0,
+            use_speaker_boost: true,
+          },
         }),
       }
     );
