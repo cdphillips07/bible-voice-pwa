@@ -32,7 +32,7 @@ exports.handler = async (event) => {
         },
         body: JSON.stringify({
           text: text.trim(),
-          model_id: "eleven_monolingual_v1",
+          model_id: "eleven_multilingual_v2",
           voice_settings: {
             stability: 0.85,
             similarity_boost: 0.85,
