@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const FREE_QUESTIONS_PER_DAY = 999;
+const FREE_QUESTIONS_PER_DAY = 3;
 const USAGE_KEY = "lw-usage";
 const SUB_KEY   = "lw-subscriber";
 
-// Stripe customer portal URL — users manage/cancel subscription here
 const STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/bpc_1TWjHlCSgitQgN9GiYx0DEgO";
 
 // ─── Usage helpers ────────────────────────────────────────────────────────────
@@ -113,7 +112,7 @@ function TypingDots() {
   );
 }
 
-// ─── Subscription success screen ──────────────────────────────────────────────
+// ─── Subscription success ─────────────────────────────────────────────────────
 function SubscriptionSuccess({ onDismiss }) {
   return (
     <div style={{
@@ -275,8 +274,12 @@ function UsageBadge({ count, subscribed }) {
       </div>
     );
   }
+
+  // Show remaining BEFORE this question is asked
+  // count = number already used, so remaining = total - used
   const remaining = Math.max(0, FREE_QUESTIONS_PER_DAY - count);
   const color = remaining === 0 ? "#c07060" : remaining === 1 ? "#c9a84c" : "#8a7a5a";
+
   return (
     <div style={{
       display: "inline-flex", alignItems: "center", gap: 6,
@@ -315,13 +318,7 @@ function LoadingStatus({ loading, audioLoading }) {
 // ─── Footer ───────────────────────────────────────────────────────────────────
 function Footer({ subscribed }) {
   return (
-    <div style={{
-      marginTop: 24,
-      textAlign: "center",
-      display: "flex",
-      flexDirection: "column",
-      gap: 8,
-    }}>
+    <div style={{ marginTop: 24, textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
       <p style={{ color: "#3a2e1e", fontSize: 11, letterSpacing: 1 }}>
         Powered by Claude · ElevenLabs Voice Clone · Web Speech API
       </p>
@@ -423,11 +420,12 @@ export default function App() {
     }
   };
 
-  // ── Ask flow ──
+  // ── Ask flow — usage increments AFTER successful answer ──
   const askBible = async (q) => {
     const finalQ = (q || question).trim();
     if (!finalQ) return;
 
+    // Check limit BEFORE asking
     if (!subscribed) {
       const currentUsage = getUsage();
       if (currentUsage.count >= FREE_QUESTIONS_PER_DAY) {
@@ -439,14 +437,6 @@ export default function App() {
     setLoading(true);
     setAnswer(""); setAudioUrl(null); setError("");
 
-    if (!subscribed) {
-      const newUsage = incrementUsage();
-      setUsage(newUsage);
-      if (newUsage.count >= FREE_QUESTIONS_PER_DAY) {
-        setTimeout(() => setShowPaywall(true), 5000);
-      }
-    }
-
     try {
       const askRes = await fetch("/.netlify/functions/ask", {
         method: "POST",
@@ -455,6 +445,17 @@ export default function App() {
       });
       if (!askRes.ok) throw new Error(`Scripture fetch failed (${askRes.status})`);
       const { answer: text } = await askRes.json();
+
+      // ✅ Increment usage AFTER successful answer — so all 3 questions work
+      if (!subscribed) {
+        const newUsage = incrementUsage();
+        setUsage(newUsage);
+        // Show paywall after answer displays if this was the last free question
+        if (newUsage.count >= FREE_QUESTIONS_PER_DAY) {
+          setTimeout(() => setShowPaywall(true), 6000);
+        }
+      }
+
       setAnswer(text);
       setLoading(false);
       setAudioLoading(true);
@@ -554,7 +555,10 @@ export default function App() {
           borderRadius: 2, padding: "36px 40px",
           backdropFilter: "blur(8px)",
         }}>
-          <h2 style={{ color: "#c9a84c", fontSize: 13, letterSpacing: 3, fontWeight: 400, marginTop: 0, marginBottom: 16 }}>
+          <h2 style={{
+            color: "#c9a84c", fontSize: 13, letterSpacing: 3,
+            fontWeight: 400, marginTop: 0, marginBottom: 16,
+          }}>
             ASK THE SCRIPTURE
           </h2>
 
@@ -620,7 +624,11 @@ export default function App() {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askBible(); }
                 }}
               />
-              <button onClick={() => askBible()} disabled={busy || !question.trim()} style={seekBtn(busy || !question.trim())}>
+              <button
+                onClick={() => askBible()}
+                disabled={busy || !question.trim()}
+                style={seekBtn(busy || !question.trim())}
+              >
                 {loading ? "Seeking…" : audioLoading ? "Preparing Voice…" : "Seek the Word"}
               </button>
             </>
