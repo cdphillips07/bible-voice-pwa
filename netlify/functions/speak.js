@@ -34,7 +34,7 @@ exports.handler = async (event) => {
           text: text.trim(),
           model_id: "eleven_multilingual_v2",
           voice_settings: {
-            stability: 0.3,
+            stability: 0.2,
             similarity_boost: 1.0,
             style: 0.45,
             use_speaker_boost: true,
