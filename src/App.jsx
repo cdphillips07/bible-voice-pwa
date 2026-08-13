@@ -1,60 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const FREE_QUESTIONS_PER_DAY = 3;
-const USAGE_KEY = "lw-usage";
-const SUB_KEY   = "lw-subscriber";
-
-const STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/bpc_1TWjHlCSgitQgN9GiYx0DEgO";
-
-// ─── Usage helpers ────────────────────────────────────────────────────────────
-function getTodayKey() {
-  return new Date().toISOString().split("T")[0];
-}
-
-function getUsage() {
-  try {
-    const raw = localStorage.getItem(USAGE_KEY);
-    if (!raw) return { date: getTodayKey(), count: 0 };
-    const data = JSON.parse(raw);
-    if (data.date !== getTodayKey()) return { date: getTodayKey(), count: 0 };
-    return data;
-  } catch { return { date: getTodayKey(), count: 0 }; }
-}
-
-function incrementUsage() {
-  const usage = getUsage();
-  const updated = { date: getTodayKey(), count: usage.count + 1 };
-  localStorage.setItem(USAGE_KEY, JSON.stringify(updated));
-  return updated;
-}
-
-function isSubscriber() {
-  try {
-    const raw = localStorage.getItem(SUB_KEY);
-    if (!raw) return false;
-    const data = JSON.parse(raw);
-    return data.active && (!data.expiresAt || new Date(data.expiresAt) > new Date());
-  } catch { return false; }
-}
-
-function activateSubscription() {
-  const expiresAt = new Date();
-  expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-  localStorage.setItem(SUB_KEY, JSON.stringify({
-    active: true,
-    expiresAt: expiresAt.toISOString(),
-    activatedAt: new Date().toISOString(),
-  }));
-}
-
-window.activateSubscription = (months = 1) => {
-  const expiresAt = new Date();
-  expiresAt.setMonth(expiresAt.getMonth() + months);
-  localStorage.setItem(SUB_KEY, JSON.stringify({ active: true, expiresAt: expiresAt.toISOString() }));
-  window.location.reload();
-};
-
 // ─── Waveform ─────────────────────────────────────────────────────────────────
 function Waveform({ active }) {
   return (
@@ -86,11 +31,6 @@ function Waveform({ active }) {
           0%, 100% { opacity: 0.4; }
           50%       { opacity: 1;   }
         }
-        @keyframes celebratePulse {
-          0%   { transform: scale(1);    }
-          50%  { transform: scale(1.05); }
-          100% { transform: scale(1);    }
-        }
       `}</style>
     </div>
   );
@@ -108,190 +48,6 @@ function TypingDots() {
           animationDelay: `${i * 0.2}s`,
         }} />
       ))}
-    </div>
-  );
-}
-
-// ─── Subscription success ─────────────────────────────────────────────────────
-function SubscriptionSuccess({ onDismiss }) {
-  return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 100,
-      background: "rgba(0,0,0,0.85)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "20px", backdropFilter: "blur(8px)",
-    }}>
-      <div style={{
-        width: "100%", maxWidth: 440,
-        background: "linear-gradient(160deg, #0d0a07, #1a1208)",
-        border: "1px solid rgba(201,168,76,0.4)",
-        borderRadius: 4, padding: "40px 36px",
-        fontFamily: "'Georgia', serif", textAlign: "center",
-        animation: "celebratePulse 0.6s ease",
-      }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>✦</div>
-        <h2 style={{ color: "#f0e6cc", fontSize: 22, fontWeight: 400, margin: "0 0 12px", letterSpacing: 2 }}>
-          Welcome to The Living Word
-        </h2>
-        <p style={{ color: "#8a7a5a", fontSize: 14, lineHeight: 1.7, margin: "0 0 28px" }}>
-          Your subscription is active. You now have unlimited access to Scripture guidance, spoken just for you.
-        </p>
-        <button onClick={onDismiss} style={{
-          width: "100%", padding: "14px",
-          background: "#c9a84c", color: "#0d0a07",
-          border: "none", fontSize: 13, letterSpacing: 3,
-          fontFamily: "'Georgia', serif", textTransform: "uppercase",
-          cursor: "pointer", borderRadius: 2,
-        }}>
-          Begin
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Paywall ──────────────────────────────────────────────────────────────────
-function Paywall({ onClose, onSubscribe }) {
-  const [selectedPlan, setSelectedPlan] = useState("yearly");
-
-  const plans = [
-    {
-      id: "yearly",  label: "Annual",  price: "$69.99",
-      period: "per year", perMonth: "$5.83/mo",
-      badge: "BEST VALUE", savings: "Save 42%",
-    },
-    {
-      id: "monthly", label: "Monthly", price: "$9.99",
-      period: "per month", perMonth: null, badge: null, savings: null,
-    },
-  ];
-
-  return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 100,
-      background: "rgba(0,0,0,0.85)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "20px", backdropFilter: "blur(8px)",
-    }}>
-      <div style={{
-        width: "100%", maxWidth: 480,
-        background: "linear-gradient(160deg, #0d0a07, #1a1208)",
-        border: "1px solid rgba(201,168,76,0.3)",
-        borderRadius: 4, padding: "40px 36px",
-        fontFamily: "'Georgia', serif", position: "relative",
-      }}>
-        <button onClick={onClose} style={{
-          position: "absolute", top: 16, right: 16,
-          background: "none", border: "none",
-          color: "#5a4a2a", fontSize: 20, cursor: "pointer",
-        }}>✕</button>
-
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 32, color: "#c9a84c", marginBottom: 10 }}>✦</div>
-          <h2 style={{ color: "#f0e6cc", fontSize: 22, fontWeight: 400, margin: "0 0 8px", letterSpacing: 2 }}>
-            Unlock The Living Word
-          </h2>
-          <p style={{ color: "#8a7a5a", fontSize: 13, margin: 0, lineHeight: 1.6 }}>
-            You've used your 3 free questions for today.
-            Subscribe for unlimited Scripture guidance.
-          </p>
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          {[
-            "Unlimited Bible questions every day",
-            "Answers spoken in a warm personal voice",
-            "Type or speak your questions",
-            "New topics and features added regularly",
-          ].map((f) => (
-            <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <div style={{ color: "#c9a84c", fontSize: 14, flexShrink: 0 }}>✦</div>
-              <p style={{ color: "#e8dcc8", fontSize: 13, margin: 0 }}>{f}</p>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-          {plans.map((plan) => (
-            <div key={plan.id} onClick={() => setSelectedPlan(plan.id)} style={{
-              flex: 1,
-              border: `2px solid ${selectedPlan === plan.id ? "#c9a84c" : "rgba(201,168,76,0.2)"}`,
-              borderRadius: 3, padding: "14px 12px", cursor: "pointer",
-              background: selectedPlan === plan.id ? "rgba(201,168,76,0.08)" : "transparent",
-              transition: "all 0.2s", position: "relative", textAlign: "center",
-            }}>
-              {plan.badge && (
-                <div style={{
-                  position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)",
-                  background: "#c9a84c", color: "#0d0a07",
-                  fontSize: 9, letterSpacing: 1, padding: "2px 8px",
-                  borderRadius: 10, whiteSpace: "nowrap",
-                }}>{plan.badge}</div>
-              )}
-              <div style={{ color: "#c9a84c", fontSize: 11, letterSpacing: 2, marginBottom: 4 }}>
-                {plan.label.toUpperCase()}
-              </div>
-              <div style={{ color: "#f0e6cc", fontSize: 22, fontWeight: 400, marginBottom: 2 }}>
-                {plan.price}
-              </div>
-              <div style={{ color: "#8a7a5a", fontSize: 11 }}>{plan.period}</div>
-              {plan.perMonth && <div style={{ color: "#c9a84c", fontSize: 11, marginTop: 4 }}>{plan.perMonth}</div>}
-              {plan.savings  && <div style={{ color: "#8a7a5a", fontSize: 10, marginTop: 2 }}>{plan.savings}</div>}
-            </div>
-          ))}
-        </div>
-
-        <button onClick={() => onSubscribe(selectedPlan)} style={{
-          width: "100%", padding: "14px",
-          background: "#c9a84c", color: "#0d0a07",
-          border: "none", fontSize: 13, letterSpacing: 3,
-          fontFamily: "'Georgia', serif", textTransform: "uppercase",
-          cursor: "pointer", borderRadius: 2, marginBottom: 12,
-        }}>
-          {selectedPlan === "yearly" ? "Subscribe — $69.99/year" : "Subscribe — $9.99/month"}
-        </button>
-
-        <p style={{ color: "#3a2e1e", fontSize: 10, textAlign: "center", margin: 0, lineHeight: 1.6, letterSpacing: 1 }}>
-          Cancel anytime · Secure payment · Billed through Stripe
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Usage Badge ──────────────────────────────────────────────────────────────
-function UsageBadge({ count, subscribed }) {
-  if (subscribed) {
-    return (
-      <div style={{
-        display: "inline-flex", alignItems: "center", gap: 6,
-        background: "rgba(201,168,76,0.1)",
-        border: "1px solid rgba(201,168,76,0.25)",
-        borderRadius: 20, padding: "4px 12px", marginBottom: 20,
-      }}>
-        <span style={{ color: "#c9a84c", fontSize: 11 }}>✦</span>
-        <span style={{ color: "#c9a84c", fontSize: 11, letterSpacing: 1 }}>UNLIMITED ACCESS</span>
-      </div>
-    );
-  }
-
-  // Show remaining BEFORE this question is asked
-  // count = number already used, so remaining = total - used
-  const remaining = Math.max(0, FREE_QUESTIONS_PER_DAY - count);
-  const color = remaining === 0 ? "#c07060" : remaining === 1 ? "#c9a84c" : "#8a7a5a";
-
-  return (
-    <div style={{
-      display: "inline-flex", alignItems: "center", gap: 6,
-      background: "rgba(255,255,255,0.03)",
-      border: `1px solid ${color}40`,
-      borderRadius: 20, padding: "4px 12px", marginBottom: 20,
-    }}>
-      <span style={{ color, fontSize: 11, letterSpacing: 1 }}>
-        {remaining === 0
-          ? "NO FREE QUESTIONS REMAINING TODAY"
-          : `${remaining} FREE QUESTION${remaining !== 1 ? "S" : ""} REMAINING TODAY`}
-      </span>
     </div>
   );
 }
@@ -316,12 +72,34 @@ function LoadingStatus({ loading, audioLoading }) {
 }
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
-function Footer({ subscribed }) {
+function Footer() {
   return (
-    <div style={{ marginTop: 24, textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
-      <p style={{ color: "#3a2e1e", fontSize: 11, letterSpacing: 1 }}>
+    <div style={{ marginTop: 24, textAlign: "center", display: "flex", flexDirection: "column", gap: 10 }}>
+
+      {/* Sponsor placeholder — replace with actual sponsor when confirmed */}
+      <div style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        gap: 8, margin: "0 auto",
+        background: "rgba(201,168,76,0.04)",
+        border: "1px solid rgba(201,168,76,0.12)",
+        borderRadius: 20, padding: "5px 16px",
+      }}>
+        <span style={{ color: "#5a4a2a", fontSize: 10, letterSpacing: 1 }}>
+          MADE POSSIBLE BY OUR SPONSORS
+        </span>
+        <span style={{ color: "#3a2e1e", fontSize: 10 }}>·</span>
+        <a
+          href="mailto:clayton@claytonphillips.com?subject=Living Word Sponsorship"
+          style={{ color: "#c9a84c", fontSize: 10, letterSpacing: 1, textDecoration: "none" }}
+        >
+          BECOME A SPONSOR
+        </a>
+      </div>
+
+      <p style={{ color: "#3a2e1e", fontSize: 11, letterSpacing: 1, margin: 0 }}>
         Powered by Claude · ElevenLabs Voice Clone · Web Speech API
       </p>
+
       <div style={{ display: "flex", justifyContent: "center", gap: 20, flexWrap: "wrap" }}>
         <a href="/privacy.html" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
           Privacy Policy
@@ -329,11 +107,9 @@ function Footer({ subscribed }) {
         <a href="/terms.html" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
           Terms of Service
         </a>
-        {subscribed && (
-          <a href={STRIPE_PORTAL_URL} style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
-            Manage Subscription
-          </a>
-        )}
+        <a href="mailto:clayton@claytonphillips.com" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
+          Contact
+        </a>
       </div>
     </div>
   );
@@ -352,24 +128,9 @@ export default function App() {
   const [inputMode,       setInputMode]       = useState("text");
   const [liveTranscript,  setLiveTranscript]  = useState("");
   const [error,           setError]           = useState("");
-  const [showPaywall,     setShowPaywall]      = useState(false);
-  const [showSuccess,     setShowSuccess]      = useState(false);
-  const [usage,           setUsage]           = useState(getUsage());
-  const [subscribed,      setSubscribed]      = useState(isSubscriber());
 
   const audioRef       = useRef(null);
   const recognitionRef = useRef(null);
-
-  // ── Detect ?subscribed=true after Stripe redirect ──
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("subscribed") === "true") {
-      activateSubscription();
-      setSubscribed(true);
-      setShowSuccess(true);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
 
   // ── Typewriter effect ──
   useEffect(() => {
@@ -420,24 +181,16 @@ export default function App() {
     }
   };
 
-  // ── Ask flow — usage increments AFTER successful answer ──
+  // ── Ask flow ──────────────────────────────────────────────────────────────
   const askBible = async (q) => {
     const finalQ = (q || question).trim();
     if (!finalQ) return;
-
-    // Check limit BEFORE asking
-    if (!subscribed) {
-      const currentUsage = getUsage();
-      if (currentUsage.count >= FREE_QUESTIONS_PER_DAY) {
-        setShowPaywall(true);
-        return;
-      }
-    }
 
     setLoading(true);
     setAnswer(""); setAudioUrl(null); setError("");
 
     try {
+      // 1️⃣ Get Scripture answer
       const askRes = await fetch("/.netlify/functions/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -446,20 +199,11 @@ export default function App() {
       if (!askRes.ok) throw new Error(`Scripture fetch failed (${askRes.status})`);
       const { answer: text } = await askRes.json();
 
-      // ✅ Increment usage AFTER successful answer — so all 3 questions work
-      if (!subscribed) {
-        const newUsage = incrementUsage();
-        setUsage(newUsage);
-        // Show paywall after answer displays if this was the last free question
-        if (newUsage.count >= FREE_QUESTIONS_PER_DAY) {
-          setTimeout(() => setShowPaywall(true), 6000);
-        }
-      }
-
       setAnswer(text);
       setLoading(false);
       setAudioLoading(true);
 
+      // 2️⃣ Convert to voice in parallel
       const speakRes = await fetch("/.netlify/functions/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -487,16 +231,7 @@ export default function App() {
     }
   };
 
-  const handleSubscribe = (plan) => {
-    const urls = {
-      monthly: "https://buy.stripe.com/8x200icJw6ht7JH2zZcwg03",
-      yearly:  "https://buy.stripe.com/28E9ASfVI7lx6FDfmLcwg04",
-    };
-    window.location.href = urls[plan];
-  };
-
-  const busy     = loading || audioLoading;
-  const hitLimit = !subscribed && usage.count >= FREE_QUESTIONS_PER_DAY;
+  const busy = loading || audioLoading;
 
   const baseInput = {
     width: "100%", background: "rgba(255,255,255,0.05)",
@@ -516,240 +251,211 @@ export default function App() {
   });
 
   return (
-    <>
-      {showSuccess && <SubscriptionSuccess onDismiss={() => setShowSuccess(false)} />}
-      {showPaywall && !showSuccess && (
-        <Paywall onClose={() => setShowPaywall(false)} onSubscribe={handleSubscribe} />
-      )}
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(160deg, #0d0a07 0%, #1a1208 50%, #0d0a07 100%)",
+      fontFamily: "'Georgia', serif",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: "40px 20px", color: "#e8dcc8",
+    }}>
 
-      <div style={{
-        minHeight: "100vh",
-        background: "linear-gradient(160deg, #0d0a07 0%, #1a1208 50%, #0d0a07 100%)",
-        fontFamily: "'Georgia', serif",
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        padding: "40px 20px", color: "#e8dcc8",
-      }}>
-
-        {/* Header */}
-        <div style={{ marginBottom: 28, textAlign: "center" }}>
-          <div style={{ fontSize: 36, color: "#c9a84c", letterSpacing: 8, marginBottom: 8 }}>✦</div>
-          <h1 style={{
-            fontSize: 28, fontWeight: 400, color: "#f0e6cc",
-            margin: 0, letterSpacing: 3, textTransform: "uppercase",
-          }}>
-            The Living Word
-          </h1>
-          <p style={{ color: "#8a7a5a", fontSize: 13, margin: "6px 0 0", letterSpacing: 2 }}>
-            Guidance from Scripture,{" "}
-            <em><strong style={{ color: "#c9a84c" }}>SPOKEN</strong></em>{" "}
-            just for you
-          </p>
-        </div>
-
-        {/* Card */}
-        <div style={{
-          width: "100%", maxWidth: 620,
-          background: "rgba(255,255,255,0.03)",
-          border: "1px solid rgba(201,168,76,0.2)",
-          borderRadius: 2, padding: "36px 40px",
-          backdropFilter: "blur(8px)",
+      {/* Header */}
+      <div style={{ marginBottom: 28, textAlign: "center" }}>
+        <div style={{ fontSize: 36, color: "#c9a84c", letterSpacing: 8, marginBottom: 8 }}>✦</div>
+        <h1 style={{
+          fontSize: 28, fontWeight: 400, color: "#f0e6cc",
+          margin: 0, letterSpacing: 3, textTransform: "uppercase",
         }}>
-          <h2 style={{
-            color: "#c9a84c", fontSize: 13, letterSpacing: 3,
-            fontWeight: 400, marginTop: 0, marginBottom: 16,
+          The Living Word
+        </h1>
+        <p style={{ color: "#8a7a5a", fontSize: 13, margin: "6px 0 0", letterSpacing: 2 }}>
+          Guidance from Scripture,{" "}
+          <em><strong style={{ color: "#c9a84c" }}>SPOKEN</strong></em>{" "}
+          just for you
+        </p>
+      </div>
+
+      {/* Card */}
+      <div style={{
+        width: "100%", maxWidth: 620,
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(201,168,76,0.2)",
+        borderRadius: 2, padding: "36px 40px",
+        backdropFilter: "blur(8px)",
+      }}>
+        <h2 style={{
+          color: "#c9a84c", fontSize: 13, letterSpacing: 3,
+          fontWeight: 400, marginTop: 0, marginBottom: 20,
+        }}>
+          ASK THE SCRIPTURE
+        </h2>
+
+        {/* Input mode toggle */}
+        {speechSupported && (
+          <div style={{
+            display: "flex", marginBottom: 20,
+            border: "1px solid rgba(201,168,76,0.2)",
+            borderRadius: 1, overflow: "hidden",
           }}>
-            ASK THE SCRIPTURE
-          </h2>
-
-          <div style={{ textAlign: "center" }}>
-            <UsageBadge count={usage.count} subscribed={subscribed} />
+            {[{ id: "text", label: "⌨  Type" }, { id: "voice", label: "🎙  Speak" }].map((m) => (
+              <button key={m.id} onClick={() => setInputMode(m.id)} style={{
+                flex: 1, padding: "9px",
+                background: inputMode === m.id ? "rgba(201,168,76,0.15)" : "transparent",
+                color:      inputMode === m.id ? "#c9a84c"               : "#5a4a2a",
+                border: "none", fontSize: 11, letterSpacing: 2,
+                cursor: "pointer", fontFamily: "'Georgia', serif",
+                textTransform: "uppercase", transition: "all 0.2s",
+              }}>{m.label}</button>
+            ))}
           </div>
+        )}
 
-          {hitLimit && (
+        {/* TEXT MODE */}
+        {inputMode === "text" && (
+          <>
+            <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 14px" }}>
+              What does the Bible say about a situation you're facing?
+            </p>
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="e.g. What does the Bible say when I'm feeling overwhelmed by anxiety?"
+              rows={3}
+              style={{ ...baseInput, resize: "vertical", lineHeight: 1.6 }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askBible(); }
+              }}
+            />
+            <button
+              onClick={() => askBible()}
+              disabled={busy || !question.trim()}
+              style={seekBtn(busy || !question.trim())}
+            >
+              {loading ? "Seeking…" : audioLoading ? "Preparing Voice…" : "Seek the Word"}
+            </button>
+          </>
+        )}
+
+        {/* VOICE MODE */}
+        {inputMode === "voice" && (
+          <div style={{ textAlign: "center" }}>
+            <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 24px" }}>
+              {isRecording
+                ? "Listening… speak your question clearly"
+                : question
+                ? "Question captured — seek the Word or re-record"
+                : "Press the microphone and ask your question aloud"}
+            </p>
+
             <div style={{
-              background: "rgba(201,168,76,0.06)",
-              border: "1px solid rgba(201,168,76,0.2)",
-              borderRadius: 2, padding: "20px",
-              textAlign: "center", marginBottom: 20,
+              position: "relative", display: "inline-flex",
+              alignItems: "center", justifyContent: "center", marginBottom: 16,
             }}>
-              <p style={{ color: "#c9a84c", fontSize: 13, margin: "0 0 14px", lineHeight: 1.7 }}>
-                You've reached your 3 free questions for today.
-                Subscribe for unlimited access to Scripture guidance.
-              </p>
-              <button onClick={() => setShowPaywall(true)} style={{
-                background: "#c9a84c", color: "#0d0a07",
-                border: "none", padding: "10px 28px",
-                fontSize: 11, letterSpacing: 3,
-                fontFamily: "'Georgia', serif",
-                textTransform: "uppercase",
-                cursor: "pointer", borderRadius: 1,
+              {isRecording && (
+                <>
+                  <div style={{ position: "absolute", width: 100, height: 100, borderRadius: "50%", border: "1px solid rgba(201,168,76,0.5)", animation: "ripple 1s ease-out infinite" }} />
+                  <div style={{ position: "absolute", width: 120, height: 120, borderRadius: "50%", border: "1px solid rgba(201,168,76,0.2)", animation: "ripple 1s ease-out infinite 0.3s" }} />
+                </>
+              )}
+              <button onClick={toggleRecording} disabled={busy} style={{
+                width: 80, height: 80, borderRadius: "50%",
+                background: isRecording ? "rgba(180,60,40,0.2)" : "rgba(201,168,76,0.08)",
+                border: `2px solid ${isRecording ? "#c0402a" : "rgba(201,168,76,0.35)"}`,
+                fontSize: 30, cursor: busy ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "all 0.3s", position: "relative", zIndex: 1,
               }}>
-                View Plans
+                {isRecording ? "⏹" : "🎙"}
               </button>
             </div>
-          )}
 
-          {speechSupported && !hitLimit && (
-            <div style={{
-              display: "flex", marginBottom: 20,
-              border: "1px solid rgba(201,168,76,0.2)",
-              borderRadius: 1, overflow: "hidden",
-            }}>
-              {[{ id: "text", label: "⌨  Type" }, { id: "voice", label: "🎙  Speak" }].map((m) => (
-                <button key={m.id} onClick={() => setInputMode(m.id)} style={{
-                  flex: 1, padding: "9px",
-                  background: inputMode === m.id ? "rgba(201,168,76,0.15)" : "transparent",
-                  color:      inputMode === m.id ? "#c9a84c"               : "#5a4a2a",
-                  border: "none", fontSize: 11, letterSpacing: 2,
-                  cursor: "pointer", fontFamily: "'Georgia', serif",
-                  textTransform: "uppercase", transition: "all 0.2s",
-                }}>{m.label}</button>
-              ))}
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <Waveform active={isRecording} />
             </div>
-          )}
 
-          {inputMode === "text" && !hitLimit && (
-            <>
-              <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 14px" }}>
-                What does the Bible say about a situation you're facing?
-              </p>
-              <textarea
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="e.g. What does the Bible say when I'm feeling overwhelmed by anxiety?"
-                rows={3}
-                style={{ ...baseInput, resize: "vertical", lineHeight: 1.6 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); askBible(); }
-                }}
-              />
-              <button
-                onClick={() => askBible()}
-                disabled={busy || !question.trim()}
-                style={seekBtn(busy || !question.trim())}
-              >
+            {(liveTranscript || question) && (
+              <div style={{
+                background: "rgba(201,168,76,0.05)",
+                border: "1px solid rgba(201,168,76,0.15)",
+                borderRadius: 1, padding: "12px 16px", marginBottom: 16, textAlign: "left",
+              }}>
+                <div style={{ fontSize: 10, letterSpacing: 2, color: "#8a7a5a", marginBottom: 6 }}>
+                  {isRecording ? "HEARING…" : "YOU ASKED"}
+                </div>
+                <p style={{ color: "#e8dcc8", fontSize: 14, margin: 0, fontStyle: "italic", lineHeight: 1.6 }}>
+                  "{liveTranscript || question}"
+                </p>
+              </div>
+            )}
+
+            {question && !isRecording && (
+              <button onClick={() => askBible()} disabled={busy} style={seekBtn(busy)}>
                 {loading ? "Seeking…" : audioLoading ? "Preparing Voice…" : "Seek the Word"}
               </button>
-            </>
-          )}
+            )}
+          </div>
+        )}
 
-          {inputMode === "voice" && !hitLimit && (
-            <div style={{ textAlign: "center" }}>
-              <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 24px" }}>
-                {isRecording
-                  ? "Listening… speak your question clearly"
-                  : question
-                  ? "Question captured — seek the Word or re-record"
-                  : "Press the microphone and ask your question aloud"}
-              </p>
+        {/* Loading indicator */}
+        <LoadingStatus loading={loading} audioLoading={audioLoading} />
 
+        {/* Error */}
+        {error && (
+          <div style={{
+            marginTop: 16, padding: "10px 14px",
+            background: "rgba(180,60,40,0.1)",
+            border: "1px solid rgba(180,60,40,0.3)",
+            borderRadius: 1, color: "#c07060", fontSize: 13,
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Answer */}
+        {displayedAnswer && (
+          <div style={{
+            marginTop: 28, paddingTop: 24,
+            borderTop: "1px solid rgba(201,168,76,0.15)",
+            animation: "fadeIn 0.4s ease",
+          }}>
+            <div style={{ fontSize: 11, letterSpacing: 2, color: "#c9a84c", marginBottom: 14 }}>
+              THE WORD SPEAKS
+            </div>
+            <p style={{ color: "#e8dcc8", fontSize: 15, lineHeight: 1.85, margin: 0, fontStyle: "italic" }}>
+              {displayedAnswer}
+              {displayedAnswer.length < answer.length && (
+                <span style={{ animation: "pulse 0.8s infinite", opacity: 0.7 }}>▌</span>
+              )}
+            </p>
+
+            {audioUrl && (
+              <div style={{ marginTop: 24, animation: "fadeIn 0.4s ease" }}>
+                <div style={{ fontSize: 11, letterSpacing: 2, color: "#8a7a5a", marginBottom: 10 }}>
+                  ♦ SPOKEN IN YOUR VOICE
+                </div>
+                <audio ref={audioRef} controls src={audioUrl} style={{
+                  width: "100%",
+                  filter: "invert(0.85) sepia(0.3) hue-rotate(5deg)",
+                  borderRadius: 2,
+                }} />
+              </div>
+            )}
+
+            {audioLoading && !audioUrl && (
               <div style={{
-                position: "relative", display: "inline-flex",
-                alignItems: "center", justifyContent: "center", marginBottom: 16,
+                marginTop: 20, display: "flex", alignItems: "center", gap: 10,
+                color: "#5a4a2a", fontSize: 11, letterSpacing: 1,
               }}>
-                {isRecording && (
-                  <>
-                    <div style={{ position: "absolute", width: 100, height: 100, borderRadius: "50%", border: "1px solid rgba(201,168,76,0.5)", animation: "ripple 1s ease-out infinite" }} />
-                    <div style={{ position: "absolute", width: 120, height: 120, borderRadius: "50%", border: "1px solid rgba(201,168,76,0.2)", animation: "ripple 1s ease-out infinite 0.3s" }} />
-                  </>
-                )}
-                <button onClick={toggleRecording} disabled={busy} style={{
-                  width: 80, height: 80, borderRadius: "50%",
-                  background: isRecording ? "rgba(180,60,40,0.2)" : "rgba(201,168,76,0.08)",
-                  border: `2px solid ${isRecording ? "#c0402a" : "rgba(201,168,76,0.35)"}`,
-                  fontSize: 30, cursor: busy ? "not-allowed" : "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 0.3s", position: "relative", zIndex: 1,
-                }}>
-                  {isRecording ? "⏹" : "🎙"}
-                </button>
+                <TypingDots />
+                <span>PREPARING YOUR VOICE…</span>
               </div>
-
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-                <Waveform active={isRecording} />
-              </div>
-
-              {(liveTranscript || question) && (
-                <div style={{
-                  background: "rgba(201,168,76,0.05)",
-                  border: "1px solid rgba(201,168,76,0.15)",
-                  borderRadius: 1, padding: "12px 16px", marginBottom: 16, textAlign: "left",
-                }}>
-                  <div style={{ fontSize: 10, letterSpacing: 2, color: "#8a7a5a", marginBottom: 6 }}>
-                    {isRecording ? "HEARING…" : "YOU ASKED"}
-                  </div>
-                  <p style={{ color: "#e8dcc8", fontSize: 14, margin: 0, fontStyle: "italic", lineHeight: 1.6 }}>
-                    "{liveTranscript || question}"
-                  </p>
-                </div>
-              )}
-
-              {question && !isRecording && (
-                <button onClick={() => askBible()} disabled={busy} style={seekBtn(busy)}>
-                  {loading ? "Seeking…" : audioLoading ? "Preparing Voice…" : "Seek the Word"}
-                </button>
-              )}
-            </div>
-          )}
-
-          <LoadingStatus loading={loading} audioLoading={audioLoading} />
-
-          {error && (
-            <div style={{
-              marginTop: 16, padding: "10px 14px",
-              background: "rgba(180,60,40,0.1)",
-              border: "1px solid rgba(180,60,40,0.3)",
-              borderRadius: 1, color: "#c07060", fontSize: 13,
-            }}>
-              {error}
-            </div>
-          )}
-
-          {displayedAnswer && (
-            <div style={{
-              marginTop: 28, paddingTop: 24,
-              borderTop: "1px solid rgba(201,168,76,0.15)",
-              animation: "fadeIn 0.4s ease",
-            }}>
-              <div style={{ fontSize: 11, letterSpacing: 2, color: "#c9a84c", marginBottom: 14 }}>
-                THE WORD SPEAKS
-              </div>
-              <p style={{ color: "#e8dcc8", fontSize: 15, lineHeight: 1.85, margin: 0, fontStyle: "italic" }}>
-                {displayedAnswer}
-                {displayedAnswer.length < answer.length && (
-                  <span style={{ animation: "pulse 0.8s infinite", opacity: 0.7 }}>▌</span>
-                )}
-              </p>
-
-              {audioUrl && (
-                <div style={{ marginTop: 24, animation: "fadeIn 0.4s ease" }}>
-                  <div style={{ fontSize: 11, letterSpacing: 2, color: "#8a7a5a", marginBottom: 10 }}>
-                    ♦ SPOKEN IN YOUR VOICE
-                  </div>
-                  <audio ref={audioRef} controls src={audioUrl} style={{
-                    width: "100%",
-                    filter: "invert(0.85) sepia(0.3) hue-rotate(5deg)",
-                    borderRadius: 2,
-                  }} />
-                </div>
-              )}
-
-              {audioLoading && !audioUrl && (
-                <div style={{
-                  marginTop: 20, display: "flex", alignItems: "center", gap: 10,
-                  color: "#5a4a2a", fontSize: 11, letterSpacing: 1,
-                }}>
-                  <TypingDots />
-                  <span>PREPARING YOUR VOICE…</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <Footer subscribed={subscribed} />
+            )}
+          </div>
+        )}
       </div>
-    </>
+
+      <Footer />
+    </div>
   );
 }
