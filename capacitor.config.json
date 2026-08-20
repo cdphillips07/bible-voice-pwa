@@ -1,0 +1,9 @@
+{
+  "appId": "com.claytonphillips.thelivingword",
+  "appName": "The Living Word",
+  "webDir": "dist",
+  "server": {
+    "url": "https://livingword.claytonphillips.com",
+    "cleartext": false
+  }
+}

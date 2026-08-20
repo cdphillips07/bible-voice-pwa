@@ -432,7 +432,7 @@ export default function App() {
             {audioUrl && (
               <div style={{ marginTop: 24, animation: "fadeIn 0.4s ease" }}>
                 <div style={{ fontSize: 11, letterSpacing: 2, color: "#8a7a5a", marginBottom: 10 }}>
-                  ♦ SPOKEN IN YOUR VOICE
+                  ♦ SPOKEN JUST FOR YOU
                 </div>
                 <audio ref={audioRef} controls src={audioUrl} style={{
                   width: "100%",
