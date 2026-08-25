@@ -1,0 +1,6 @@
+platform :ios, '14.0'
+use_frameworks!
+
+target 'App' do
+  pod 'CapacitorCommunitySpeechRecognition', :path => '../../node_modules/@capacitor-community/speech-recognition'
+end

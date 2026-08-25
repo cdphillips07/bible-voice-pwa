@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 
+// ─── Detect if running as native Capacitor app ────────────────────────────────
+const isNativeApp = () => {
+  return window.Capacitor !== undefined && window.Capacitor.isNativePlatform();
+};
+
 // ─── Waveform ─────────────────────────────────────────────────────────────────
 function Waveform({ active }) {
   return (
@@ -75,8 +80,6 @@ function LoadingStatus({ loading, audioLoading }) {
 function Footer() {
   return (
     <div style={{ marginTop: 24, textAlign: "center", display: "flex", flexDirection: "column", gap: 10 }}>
-
-      {/* Sponsor placeholder — replace with actual sponsor when confirmed */}
       <div style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         gap: 8, margin: "0 auto",
@@ -97,7 +100,7 @@ function Footer() {
       </div>
 
       <p style={{ color: "#3a2e1e", fontSize: 11, letterSpacing: 1, margin: 0 }}>
-        Powered by Claude · ElevenLabs Voice Clone · Web Speech API
+        Powered by Claude · ElevenLabs · Web Speech API
       </p>
 
       <div style={{ display: "flex", justifyContent: "center", gap: 20, flexWrap: "wrap" }}>
@@ -131,6 +134,7 @@ export default function App() {
 
   const audioRef       = useRef(null);
   const recognitionRef = useRef(null);
+  const nativeApp      = isNativeApp();
 
   // ── Typewriter effect ──
   useEffect(() => {
@@ -145,8 +149,9 @@ export default function App() {
     return () => clearInterval(interval);
   }, [answer]);
 
-  // ── Web Speech API ──
+  // ── Web Speech API — only on web, not native app ──
   useEffect(() => {
+    if (nativeApp) return; // Skip on native iOS — not supported
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     setSpeechSupported(true);
@@ -181,7 +186,7 @@ export default function App() {
     }
   };
 
-  // ── Ask flow ──────────────────────────────────────────────────────────────
+  // ── Ask flow ──
   const askBible = async (q) => {
     const finalQ = (q || question).trim();
     if (!finalQ) return;
@@ -190,7 +195,6 @@ export default function App() {
     setAnswer(""); setAudioUrl(null); setError("");
 
     try {
-      // 1️⃣ Get Scripture answer
       const askRes = await fetch("/.netlify/functions/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -203,7 +207,6 @@ export default function App() {
       setLoading(false);
       setAudioLoading(true);
 
-      // 2️⃣ Convert to voice in parallel
       const speakRes = await fetch("/.netlify/functions/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -250,6 +253,9 @@ export default function App() {
     borderRadius: 1, transition: "all 0.3s",
   });
 
+  // Show voice tab only on web with speech support — never on native app
+  const showVoiceTab = !nativeApp && speechSupported;
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -291,8 +297,8 @@ export default function App() {
           ASK THE SCRIPTURE
         </h2>
 
-        {/* Input mode toggle */}
-        {speechSupported && (
+        {/* Input mode toggle — only shown on web with speech support */}
+        {showVoiceTab && (
           <div style={{
             display: "flex", marginBottom: 20,
             border: "1px solid rgba(201,168,76,0.2)",
@@ -311,8 +317,8 @@ export default function App() {
           </div>
         )}
 
-        {/* TEXT MODE */}
-        {inputMode === "text" && (
+        {/* TEXT MODE — always shown */}
+        {(inputMode === "text" || nativeApp) && (
           <>
             <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 14px" }}>
               What does the Bible say about a situation you're facing?
@@ -337,8 +343,8 @@ export default function App() {
           </>
         )}
 
-        {/* VOICE MODE */}
-        {inputMode === "voice" && (
+        {/* VOICE MODE — web only */}
+        {inputMode === "voice" && !nativeApp && (
           <div style={{ textAlign: "center" }}>
             <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 24px" }}>
               {isRecording
@@ -397,10 +403,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Loading indicator */}
         <LoadingStatus loading={loading} audioLoading={audioLoading} />
 
-        {/* Error */}
         {error && (
           <div style={{
             marginTop: 16, padding: "10px 14px",
@@ -412,7 +416,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Answer */}
         {displayedAnswer && (
           <div style={{
             marginTop: 28, paddingTop: 24,
