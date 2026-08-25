@@ -1,9 +1,17 @@
 import { useState, useRef, useEffect } from "react";
 
-// ─── Detect if running as native Capacitor app ────────────────────────────────
+// ─── Environment detection ────────────────────────────────────────────────────
+// When running as a bundled native app, window.Capacitor is available
 const isNativeApp = () => {
-  return window.Capacitor !== undefined && window.Capacitor.isNativePlatform();
+  return typeof window !== "undefined" &&
+    window.Capacitor !== undefined &&
+    window.Capacitor.isNativePlatform() === true;
 };
+
+// API base URL — full URL for native app, relative for web
+const API_BASE = isNativeApp()
+  ? "https://livingword.claytonphillips.com"
+  : "";
 
 // ─── Waveform ─────────────────────────────────────────────────────────────────
 function Waveform({ active }) {
@@ -131,10 +139,16 @@ export default function App() {
   const [inputMode,       setInputMode]       = useState("text");
   const [liveTranscript,  setLiveTranscript]  = useState("");
   const [error,           setError]           = useState("");
+  const [nativeApp,       setNativeApp]       = useState(false);
 
   const audioRef       = useRef(null);
   const recognitionRef = useRef(null);
-  const nativeApp      = isNativeApp();
+
+  // ── Detect native app after mount ──
+  useEffect(() => {
+    const native = isNativeApp();
+    setNativeApp(native);
+  }, []);
 
   // ── Typewriter effect ──
   useEffect(() => {
@@ -149,9 +163,9 @@ export default function App() {
     return () => clearInterval(interval);
   }, [answer]);
 
-  // ── Web Speech API — only on web, not native app ──
+  // ── Web Speech API — only on web ──
   useEffect(() => {
-    if (nativeApp) return; // Skip on native iOS — not supported
+    if (isNativeApp()) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     setSpeechSupported(true);
@@ -186,7 +200,7 @@ export default function App() {
     }
   };
 
-  // ── Ask flow ──
+  // ── Ask flow — uses full URL on native, relative on web ──
   const askBible = async (q) => {
     const finalQ = (q || question).trim();
     if (!finalQ) return;
@@ -195,7 +209,7 @@ export default function App() {
     setAnswer(""); setAudioUrl(null); setError("");
 
     try {
-      const askRes = await fetch("/.netlify/functions/ask", {
+      const askRes = await fetch(`${API_BASE}/.netlify/functions/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: finalQ }),
@@ -207,7 +221,7 @@ export default function App() {
       setLoading(false);
       setAudioLoading(true);
 
-      const speakRes = await fetch("/.netlify/functions/speak", {
+      const speakRes = await fetch(`${API_BASE}/.netlify/functions/speak`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
@@ -234,7 +248,8 @@ export default function App() {
     }
   };
 
-  const busy = loading || audioLoading;
+  const busy         = loading || audioLoading;
+  const showVoiceTab = !nativeApp && speechSupported;
 
   const baseInput = {
     width: "100%", background: "rgba(255,255,255,0.05)",
@@ -252,9 +267,6 @@ export default function App() {
     fontFamily: "'Georgia', serif", textTransform: "uppercase",
     borderRadius: 1, transition: "all 0.3s",
   });
-
-  // Show voice tab only on web with speech support — never on native app
-  const showVoiceTab = !nativeApp && speechSupported;
 
   return (
     <div style={{
@@ -297,7 +309,7 @@ export default function App() {
           ASK THE SCRIPTURE
         </h2>
 
-        {/* Input mode toggle — only shown on web with speech support */}
+        {/* Input mode toggle — web only */}
         {showVoiceTab && (
           <div style={{
             display: "flex", marginBottom: 20,
@@ -317,7 +329,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TEXT MODE — always shown */}
+        {/* TEXT MODE */}
         {(inputMode === "text" || nativeApp) && (
           <>
             <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 14px" }}>
