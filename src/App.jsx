@@ -8,10 +8,10 @@ const isNativeApp = () => {
     window.Capacitor.isNativePlatform() === true;
 };
 
-// API base URL — full URL for native app, relative for web
-const API_BASE = isNativeApp()
-  ? "https://livingword.claytonphillips.com"
-  : "";
+const API_BASE = "https://livingword.claytonphillips.com";
+
+
+
 
 // ─── Waveform ─────────────────────────────────────────────────────────────────
 function Waveform({ active }) {
@@ -249,7 +249,7 @@ export default function App() {
   };
 
   const busy         = loading || audioLoading;
-  const showVoiceTab = !nativeApp && speechSupported;
+  const showVoiceTab = false;
 
   const baseInput = {
     width: "100%", background: "rgba(255,255,255,0.05)",
