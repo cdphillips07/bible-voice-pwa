@@ -1,25 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 
-// ─── Native speech recognition (Capacitor) ───────────────────────────────────
-// Dynamically imported so web version doesn't break if plugin isn't available
-let SpeechRecognition = null;
-const loadNativePlugin = async () => {
-  try {
-    const mod = await import("@capacitor-community/speech-recognition");
-    SpeechRecognition = mod.SpeechRecognition;
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-// ─── Detect native Capacitor app ─────────────────────────────────────────────
-const isNativeApp = () => {
-  return typeof window !== "undefined" &&
-    window.Capacitor !== undefined &&
-    window.Capacitor.isNativePlatform() === true;
-};
-
 // ─── Waveform ─────────────────────────────────────────────────────────────────
 function Waveform({ active }) {
   return (
@@ -138,55 +118,9 @@ export default function App() {
   const [inputMode,       setInputMode]       = useState("text");
   const [liveTranscript,  setLiveTranscript]  = useState("");
   const [error,           setError]           = useState("");
-  const [nativeApp,       setNativeApp]       = useState(false);
 
   const audioRef       = useRef(null);
-  const webRecognitionRef = useRef(null);
-
-  // ── Setup on mount ──
-  useEffect(() => {
-    const native = isNativeApp();
-    setNativeApp(native);
-
-    if (native) {
-      // Load native speech plugin and request permissions
-      loadNativePlugin().then(async (loaded) => {
-        if (loaded && SpeechRecognition) {
-          try {
-            const { speechRecognition } = await SpeechRecognition.requestPermissions();
-            if (speechRecognition === "granted") {
-              setSpeechSupported(true);
-            }
-          } catch (e) {
-            console.log("Speech permission denied:", e);
-          }
-        }
-      });
-    } else {
-      // Web Speech API
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) return;
-      setSpeechSupported(true);
-      const rec = new SR();
-      rec.continuous     = false;
-      rec.interimResults = true;
-      rec.lang           = "en-US";
-      rec.onstart  = () => { setIsRecording(true); setLiveTranscript(""); };
-      rec.onend    = () => setIsRecording(false);
-      rec.onerror  = () => setIsRecording(false);
-      rec.onresult = (e) => {
-        let interim = "", final = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) final += t;
-          else interim += t;
-        }
-        setLiveTranscript(final || interim);
-        if (final) setQuestion(final);
-      };
-      webRecognitionRef.current = rec;
-    }
-  }, []);
+  const recognitionRef = useRef(null);
 
   // ── Typewriter effect ──
   useEffect(() => {
@@ -201,50 +135,39 @@ export default function App() {
     return () => clearInterval(interval);
   }, [answer]);
 
-  // ── Toggle recording — native or web ──
-  const toggleRecording = async () => {
-    if (nativeApp && SpeechRecognition) {
-      // Native iOS speech recognition
-      if (isRecording) {
-        await SpeechRecognition.stop();
-        setIsRecording(false);
-      } else {
-        setQuestion(""); setLiveTranscript("");
-        setAnswer(""); setAudioUrl(null); setError("");
-        setIsRecording(true);
-
-        await SpeechRecognition.start({
-          language: "en-US",
-          maxResults: 1,
-          popup: false,
-          partialResults: true,
-        });
-
-        // Listen for results
-        SpeechRecognition.addListener("partialResults", (data) => {
-          if (data.matches && data.matches.length > 0) {
-            setLiveTranscript(data.matches[0]);
-          }
-        });
-
-        SpeechRecognition.addListener("listeningState", (state) => {
-          if (state.status === "stopped") {
-            setIsRecording(false);
-            SpeechRecognition.removeAllListeners();
-            // Use last transcript as final question
-            setQuestion((prev) => prev || liveTranscript);
-          }
-        });
+  // ── Web Speech API ──
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    setSpeechSupported(true);
+    const rec = new SR();
+    rec.continuous     = false;
+    rec.interimResults = true;
+    rec.lang           = "en-US";
+    rec.onstart  = () => { setIsRecording(true); setLiveTranscript(""); };
+    rec.onend    = () => setIsRecording(false);
+    rec.onerror  = () => setIsRecording(false);
+    rec.onresult = (e) => {
+      let interim = "", final = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) final += t;
+        else interim += t;
       }
-    } else if (webRecognitionRef.current) {
-      // Web Speech API
-      if (isRecording) {
-        webRecognitionRef.current.stop();
-      } else {
-        setQuestion(""); setLiveTranscript("");
-        setAnswer(""); setAudioUrl(null); setError("");
-        webRecognitionRef.current.start();
-      }
+      setLiveTranscript(final || interim);
+      if (final) setQuestion(final);
+    };
+    recognitionRef.current = rec;
+  }, []);
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) return;
+    if (isRecording) {
+      recognitionRef.current.stop();
+    } else {
+      setQuestion(""); setLiveTranscript("");
+      setAnswer(""); setAudioUrl(null); setError("");
+      recognitionRef.current.start();
     }
   };
 
@@ -296,8 +219,7 @@ export default function App() {
     }
   };
 
-  const busy         = loading || audioLoading;
-  const showVoiceTab = true;
+  const busy = loading || audioLoading;
 
   const baseInput = {
     width: "100%", background: "rgba(255,255,255,0.05)",
@@ -357,8 +279,8 @@ export default function App() {
           ASK THE SCRIPTURE
         </h2>
 
-        {/* Input mode toggle */}
-        {showVoiceTab && (
+        {/* Input mode toggle — shown when speech is supported */}
+        {speechSupported && (
           <div style={{
             display: "flex", marginBottom: 20,
             border: "1px solid rgba(201,168,76,0.2)",
