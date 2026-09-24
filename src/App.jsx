@@ -1,17 +1,24 @@
 import { useState, useRef, useEffect } from "react";
 
-// ─── Environment detection ────────────────────────────────────────────────────
-// When running as a bundled native app, window.Capacitor is available
+// ─── Native speech recognition (Capacitor) ───────────────────────────────────
+// Dynamically imported so web version doesn't break if plugin isn't available
+let SpeechRecognition = null;
+const loadNativePlugin = async () => {
+  try {
+    const mod = await import("@capacitor-community/speech-recognition");
+    SpeechRecognition = mod.SpeechRecognition;
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// ─── Detect native Capacitor app ─────────────────────────────────────────────
 const isNativeApp = () => {
   return typeof window !== "undefined" &&
     window.Capacitor !== undefined &&
     window.Capacitor.isNativePlatform() === true;
 };
-
-const API_BASE = "https://livingword.claytonphillips.com";
-
-
-
 
 // ─── Waveform ─────────────────────────────────────────────────────────────────
 function Waveform({ active }) {
@@ -106,21 +113,13 @@ function Footer() {
           BECOME A SPONSOR
         </a>
       </div>
-
       <p style={{ color: "#3a2e1e", fontSize: 11, letterSpacing: 1, margin: 0 }}>
         Powered by Claude · ElevenLabs · Web Speech API
       </p>
-
       <div style={{ display: "flex", justifyContent: "center", gap: 20, flexWrap: "wrap" }}>
-        <a href="/privacy.html" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
-          Privacy Policy
-        </a>
-        <a href="/terms.html" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
-          Terms of Service
-        </a>
-        <a href="mailto:clayton@claytonphillips.com" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>
-          Contact
-        </a>
+        <a href="/privacy.html" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>Privacy Policy</a>
+        <a href="/terms.html" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>Terms of Service</a>
+        <a href="mailto:clayton@claytonphillips.com" style={{ color: "#3a2e1e", fontSize: 10, letterSpacing: 1, textDecoration: "underline" }}>Contact</a>
       </div>
     </div>
   );
@@ -142,12 +141,51 @@ export default function App() {
   const [nativeApp,       setNativeApp]       = useState(false);
 
   const audioRef       = useRef(null);
-  const recognitionRef = useRef(null);
+  const webRecognitionRef = useRef(null);
 
-  // ── Detect native app after mount ──
+  // ── Setup on mount ──
   useEffect(() => {
     const native = isNativeApp();
     setNativeApp(native);
+
+    if (native) {
+      // Load native speech plugin and request permissions
+      loadNativePlugin().then(async (loaded) => {
+        if (loaded && SpeechRecognition) {
+          try {
+            const { speechRecognition } = await SpeechRecognition.requestPermissions();
+            if (speechRecognition === "granted") {
+              setSpeechSupported(true);
+            }
+          } catch (e) {
+            console.log("Speech permission denied:", e);
+          }
+        }
+      });
+    } else {
+      // Web Speech API
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) return;
+      setSpeechSupported(true);
+      const rec = new SR();
+      rec.continuous     = false;
+      rec.interimResults = true;
+      rec.lang           = "en-US";
+      rec.onstart  = () => { setIsRecording(true); setLiveTranscript(""); };
+      rec.onend    = () => setIsRecording(false);
+      rec.onerror  = () => setIsRecording(false);
+      rec.onresult = (e) => {
+        let interim = "", final = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) final += t;
+          else interim += t;
+        }
+        setLiveTranscript(final || interim);
+        if (final) setQuestion(final);
+      };
+      webRecognitionRef.current = rec;
+    }
   }, []);
 
   // ── Typewriter effect ──
@@ -163,44 +201,54 @@ export default function App() {
     return () => clearInterval(interval);
   }, [answer]);
 
-  // ── Web Speech API — only on web ──
-  useEffect(() => {
-    if (isNativeApp()) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
-    setSpeechSupported(true);
-    const rec = new SR();
-    rec.continuous     = false;
-    rec.interimResults = true;
-    rec.lang           = "en-US";
-    rec.onstart  = () => { setIsRecording(true); setLiveTranscript(""); };
-    rec.onend    = () => setIsRecording(false);
-    rec.onerror  = () => setIsRecording(false);
-    rec.onresult = (e) => {
-      let interim = "", final = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) final += t;
-        else interim += t;
-      }
-      setLiveTranscript(final || interim);
-      if (final) setQuestion(final);
-    };
-    recognitionRef.current = rec;
-  }, []);
+  // ── Toggle recording — native or web ──
+  const toggleRecording = async () => {
+    if (nativeApp && SpeechRecognition) {
+      // Native iOS speech recognition
+      if (isRecording) {
+        await SpeechRecognition.stop();
+        setIsRecording(false);
+      } else {
+        setQuestion(""); setLiveTranscript("");
+        setAnswer(""); setAudioUrl(null); setError("");
+        setIsRecording(true);
 
-  const toggleRecording = () => {
-    if (!recognitionRef.current) return;
-    if (isRecording) {
-      recognitionRef.current.stop();
-    } else {
-      setQuestion(""); setLiveTranscript("");
-      setAnswer(""); setAudioUrl(null); setError("");
-      recognitionRef.current.start();
+        await SpeechRecognition.start({
+          language: "en-US",
+          maxResults: 1,
+          popup: false,
+          partialResults: true,
+        });
+
+        // Listen for results
+        SpeechRecognition.addListener("partialResults", (data) => {
+          if (data.matches && data.matches.length > 0) {
+            setLiveTranscript(data.matches[0]);
+          }
+        });
+
+        SpeechRecognition.addListener("listeningState", (state) => {
+          if (state.status === "stopped") {
+            setIsRecording(false);
+            SpeechRecognition.removeAllListeners();
+            // Use last transcript as final question
+            setQuestion((prev) => prev || liveTranscript);
+          }
+        });
+      }
+    } else if (webRecognitionRef.current) {
+      // Web Speech API
+      if (isRecording) {
+        webRecognitionRef.current.stop();
+      } else {
+        setQuestion(""); setLiveTranscript("");
+        setAnswer(""); setAudioUrl(null); setError("");
+        webRecognitionRef.current.start();
+      }
     }
   };
 
-  // ── Ask flow — uses full URL on native, relative on web ──
+  // ── Ask flow ──
   const askBible = async (q) => {
     const finalQ = (q || question).trim();
     if (!finalQ) return;
@@ -209,7 +257,7 @@ export default function App() {
     setAnswer(""); setAudioUrl(null); setError("");
 
     try {
-      const askRes = await fetch(`${API_BASE}/.netlify/functions/ask`, {
+      const askRes = await fetch("https://livingword.claytonphillips.com/.netlify/functions/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: finalQ }),
@@ -221,7 +269,7 @@ export default function App() {
       setLoading(false);
       setAudioLoading(true);
 
-      const speakRes = await fetch(`${API_BASE}/.netlify/functions/speak`, {
+      const speakRes = await fetch("https://livingword.claytonphillips.com/.netlify/functions/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
@@ -249,7 +297,7 @@ export default function App() {
   };
 
   const busy         = loading || audioLoading;
-  const showVoiceTab = false;
+  const showVoiceTab = true;
 
   const baseInput = {
     width: "100%", background: "rgba(255,255,255,0.05)",
@@ -309,7 +357,7 @@ export default function App() {
           ASK THE SCRIPTURE
         </h2>
 
-        {/* Input mode toggle — web only */}
+        {/* Input mode toggle */}
         {showVoiceTab && (
           <div style={{
             display: "flex", marginBottom: 20,
@@ -330,7 +378,7 @@ export default function App() {
         )}
 
         {/* TEXT MODE */}
-        {(inputMode === "text" || nativeApp) && (
+        {inputMode === "text" && (
           <>
             <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 14px" }}>
               What does the Bible say about a situation you're facing?
@@ -355,8 +403,8 @@ export default function App() {
           </>
         )}
 
-        {/* VOICE MODE — web only */}
-        {inputMode === "voice" && !nativeApp && (
+        {/* VOICE MODE */}
+        {inputMode === "voice" && (
           <div style={{ textAlign: "center" }}>
             <p style={{ color: "#8a7a5a", fontSize: 12, lineHeight: 1.7, margin: "0 0 24px" }}>
               {isRecording
